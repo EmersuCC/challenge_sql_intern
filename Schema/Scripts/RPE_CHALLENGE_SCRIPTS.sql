@@ -21,78 +21,114 @@ CREATE TABLE IF NOT EXISTS PAGAMENTO (
 	ID_FATURA INTEGER REFERENCES FATURA(ID_FATURA)
 );
 
-INSERT INTO CLIENTE (nome, idade, status_bloqueio, limite_credito)
-VALUES 
-	('Emerson Santos Barbosa', 22, 'A', 1500),
-	('Ester R.L. Santos', 22, 'A', 2500),
-	('Elainy', 37, 'A', 5500),
-	('Ednaldo', 60, 'B', 1500),
-	('Maria do Socorro', '57', 'A', 8500),
-	('Keyla Silva', 29, 'B', 500),
-	('Mércia Silva', 26, 'A', 1000),
-	('Eliseu R.L. Santos', 19, 'A', 550),
-	('Juliana Cabral', 31, 'A', 15000),
-	('Maicosuel Lurdes', 19, 'A', 10);
-	
-SELECT * FROM CLIENTE;
-
-INSERT INTO FATURA (data_vencimento, valor, status, id_cliente)
-VALUES
-	('13-02-2023', 1328.50, 'P', 1),
-	('13-02-2023', 18.50, 'A', 2),
-	('13-02-2023', 328.00, 'A', 3),
-	('13-02-2023', 1328.50, 'P', 4),
-	('13-02-2023', 8000, 'P', 5),
-	('13-02-2023', 13, 'A', 6),
-	('13-02-2023', 892, 'P', 7),
-	('13-02-2023', 52.50, 'P', 8),
-	('13-02-2023', 138.50, 'P', 9),
-	('13-02-2023', 1328.50, 'P', 10);
-	
-	
-SELECT * FROM FATURA;
+-- View para verificar clientes com idade entre 18 e 21 anos que possuem limite de crédito maior ou igual a 1000 reais.
 
 
-INSERT INTO PAGAMENTO (data_pagamento, valor, id_fatura)
-VALUES 
-	('13-02-2023', 1328.50, 1),
-	('13-02-2023', 18.50, 2),
-	('13-02-2023', 328.00, 3),
-	('13-02-2023', 1328.50, 4),
-	('13-02-2023', 8000, 5),
-	('13-02-2023', 13, 6),
-	('13-02-2023', 892, 7),
-	('13-02-2023', 52.50, 8),
-	('13-02-2023', 138.50, 9),
-	('13-02-2023', 1328.50, 10);
-	
-SELECT * FROM PAGAMENTO;
-
-
-/* View para verificar clientes com idade entre 18 e 21 anos que possuem limite de crédito
-*  maior ou igual a 1000 reais.   
-*/
-
-SELECT
-	COUNT(*) AS CLIENTE_1K_18_21
-FROM
-	CLIENTE
-WHERE
-	(IDADE BETWEEN 20
-	AND 30)
-	AND LIMITE_CREDITO >= 1000
-	AND STATUS_BLOQUEIO = 'A';
+CREATE OR REPLACE VIEW V_CLIENTE_LIM_BE_1000 AS
+	SELECT
+		COUNT(*) AS CLIENTE_1K_18_21
+	FROM
+		CLIENTE
+	WHERE
+		(IDADE BETWEEN 18
+		AND 21)
+		AND LIMITE_CREDITO >= 1000
+		AND STATUS_BLOQUEIO = 'A';
 
 -- View para verificar clientes que realizaram pagamento no dia do vencimento da Fatura.
 
-SELECT
-	F.DATA_VENCIMENTO,
-	COUNT(*) AS QUANTIDADE
-FROM
-	FATURA    F
-	JOIN PAGAMENTO P
-	ON F.ID_FATURA = P.ID_FATURA
-WHERE
-	F.DATA_VENCIMENTO = P.DATA_PAGAMENTO
-GROUP BY
-	F.DATA_VENCIMENTO;
+CREATE OR REPLACE VIEW V_PAGAMENTO_DIA_VENCIMENTO AS
+	SELECT
+		F.DATA_VENCIMENTO,
+		COUNT(*) AS QUANTIDADE
+	FROM
+		FATURA    F
+		JOIN PAGAMENTO P
+		ON F.ID_FATURA = P.ID_FATURA
+	WHERE
+		F.DATA_VENCIMENTO = P.DATA_PAGAMENTO
+	GROUP BY
+		F.DATA_VENCIMENTO;
+
+-- View para verificar clientes que realizaram pagamento no dia anterior ao vencimento da Fatura.
+
+CREATE OR REPLACE VIEW V_PAGAMENTOS_DIA_ANTERIOR AS
+	SELECT
+		C.ID_CLIENTE,
+		F.VALOR,
+		P.DATA_PAGAMENTO
+	FROM
+		CLIENTE   C
+		JOIN FATURA F
+		ON C.ID_CLIENTE = F.ID_CLIENTE JOIN PAGAMENTO P
+		ON F.ID_FATURA = P.ID_FATURA
+	WHERE
+		P.DATA_PAGAMENTO = F.DATA_VENCIMENTO - INTERVAL '1 DAY';
+
+-- View para verificar clientes que possuem faturas em atraso.
+
+CREATE OR REPLACE VIEW V_CLIENTE_EM_ATRASO AS
+	SELECT
+		C.ID_CLIENTE,
+		C.NOME,
+		F.VALOR,
+		F.DATA_VENCIMENTO,
+		CASE F.STATUS
+			WHEN 'P' THEN
+				'Pago'
+			WHEN 'A' THEN
+				'Atraso'
+		END                 AS STATUS,
+		EXTRACT(DAY
+	FROM
+		AGE(NOW(),
+		F.DATA_VENCIMENTO)) AS DIAS_EM_ATRASO
+	FROM
+		CLIENTE   C
+		JOIN FATURA F
+		ON C.ID_CLIENTE = F.ID_CLIENTE LEFT JOIN PAGAMENTO P
+		ON F.ID_FATURA = P.ID_FATURA
+	WHERE
+		F.STATUS IN ('A',
+		'P')
+		AND (P.DATA_PAGAMENTO IS NULL
+		OR P.DATA_PAGAMENTO > F.DATA_VENCIMENTO)
+	ORDER BY
+
+
+
+-- View para listar os clientes que estão com faturas em atraso há mais de 3 dias
+
+CREATE OR REPLACE VIEW V_ATRASO_PAGAMENTO_3DIAS AS
+    SELECT
+        C.ID_CLIENTE,
+        C.NOME,
+        CASE
+            WHEN EXTRACT(DAY FROM AGE(NOW(), F.DATA_VENCIMENTO)) > 3 THEN
+                'Bloqueado'
+            ELSE
+                'Ativo'
+        END                 AS STATUS_BLOQUEIO,
+        F.ID_FATURA,
+        F.VALOR,
+        EXTRACT(DAY
+    FROM
+        AGE(NOW(),
+        F.DATA_VENCIMENTO)) AS DIAS_EM_ATRASO
+    FROM
+        CLIENTE   C
+        JOIN FATURA F
+        ON C.ID_CLIENTE = F.ID_CLIENTE LEFT JOIN PAGAMENTO P
+        ON F.ID_FATURA = P.ID_FATURA
+    WHERE
+        F.STATUS = 'A'
+        AND (P.DATA_PAGAMENTO IS NULL
+        OR P.DATA_PAGAMENTO > F.DATA_VENCIMENTO)
+    ORDER BY
+        DIAS_EM_ATRASO
+
+SELECT * FROM V_ATRASO_PAGAMENTO_3DIAS;
+SELECT * FROM V_PAGAMENTO_DIA_VENCIMENTO;
+SELECT * FROM V_PAGAMENTOS_DIA_ANTERIOR;
+SELECT * FROM V_CLIENTE_LIM_GE_1000;
+SELECT * FROM V_CLIENTE_EM_ATRASO;
