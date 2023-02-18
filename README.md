@@ -1,6 +1,12 @@
 # Controle de Faturas
 ## Estrutura do banco de dados
-#### Este é um banco de dados que permite o gerenciamento de clientes, faturas e pagamentos. Ele é composto por três tabelas principais: cliente, fatura e pagamento.
+#### Este é um banco de dados que permite o gerenciamento de clientes, faturas e pagamentos. 
+Ele é composto por três tabelas principais: cliente, fatura e pagamento. O detalhamento
+das tabelas encontra-se no diagrama entidade relacionamento abaixo, juntamente com suas views:
+
+![MODEL_ERD](https://user-images.githubusercontent.com/62714085/219845559-9db8d5d8-3dea-49db-9235-36f5e7bc1efb.png)
+
+
 
 ## **Cliente**:
 
@@ -11,7 +17,6 @@ nome	| VARCHAR(50)	| Nome do cliente
 idade	| VARCHAR(100) |	Idade do cliente
 status_bloqueio	| CHAR(1)	| Status cliente ('A' para ativo e 'B' para bloqueado)
 limite_credito | DECIMAL(10,2) | Limite de crédito disponível para o cliente
-
 
 
 
@@ -113,5 +118,13 @@ reais
   ```
 - Exclusão de clientes sem faturas associadas.
   - Rotina associada: 
-  ```sql
-  SELECT SOMETHING
+  ```plpgsql
+  -- Procedure
+  CALL EXCLUIR_CLIENTES_SEM_FATURAS();
+  
+  -- Função
+  SELECT EXCLUIR_CLIENTES_SEM_FATURA();
+  ```
+  
+  A função **EXCLUIR_CLIENTES_SEM_FATURA** pode ser agendada para execução
+  automatica dentro de um periodo determinado por diferentes meios, a depender do sistema operacional.
