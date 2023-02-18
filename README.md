@@ -118,5 +118,13 @@ reais
   ```
 - Exclusão de clientes sem faturas associadas.
   - Rotina associada: 
-  ```sql
-  SELECT SOMETHING
+  ```plpgsql
+  -- Procedure
+  CALL EXCLUIR_CLIENTES_SEM_FATURAS();
+  
+  -- Função
+  SELECT EXCLUIR_CLIENTES_SEM_FATURA();
+  ```
+  
+  A função **EXCLUIR_CLIENTES_SEM_FATURA** pode ser agendada para execução
+  automatica dentro de um periodo determinado por diferentes meios, a depender do sistema operacional.
