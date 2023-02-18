@@ -1,3 +1,20 @@
+
+-- Rode os 3 DELETES abaixo na ordem em que está para limpar todas as tabelas e reiniciar os IDs. 
+
+DELETE FROM FATURA;
+ALTER SEQUENCE fatura_id_fatura_seq
+RESTART WITH 1;
+
+DELETE FROM PAGAMENTO; 
+ALTER SEQUENCE pagamento_id_pagamento_seq
+RESTART WITH 1;
+
+DELETE FROM CLIENTE;
+ALTER SEQUENCE cliente_id_cliente_seq 
+RESTART WITH 1;
+
+-- Rode os scripts abaixo para inserir os dados iniciais.
+
 INSERT INTO CLIENTE (nome, idade, status_bloqueio, limite_credito)
 VALUES 
 	('Emerson Santos Barbosa', 18, 'A', 1500),
@@ -12,6 +29,14 @@ VALUES
 	('Maicosuel Lurdes', 19, 'A', 10);
 	
 SELECT * FROM CLIENTE;
+
+
+
+
+-- Rode os scripts abaixo para inserir os dados iniciais de Fatura.
+-- Antes de rodar o script de inserção, poderá chamar a função "FUNC_EXCLUIR_CLIENTES_SEM_FATURA"
+-- para visualizar seu funcionamento
+
 
 INSERT INTO FATURA (data_vencimento, valor, status, id_cliente)
 VALUES
@@ -29,6 +54,10 @@ VALUES
 	
 SELECT * FROM FATURA;
 
+
+-- Rode os scripts abaixo para inserir os dados iniciais de Pagamento.
+-- Após inserção poderá chamar a procedure "EFETUAR_PAGAMENTO" para visualizar seu funcionamento
+-- Os parâmetros são: ID_FAT=ID da fatura, VALOR_PAG=Valor do pagamento.
 
 INSERT INTO PAGAMENTO (DATA_PAGAMENTO, VALOR, ID_FATURA)
 VALUES 
