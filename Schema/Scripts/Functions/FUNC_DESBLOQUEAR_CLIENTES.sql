@@ -9,8 +9,7 @@ BEGIN
         FROM
             FATURA
         WHERE
-            DATA_VENCIMENTO >= (NOW() - INTERVAL '3 days')
-            AND STATUS = 'B'
+            STATUS = 'B'
     );
     RETURN NEW;
 END;
