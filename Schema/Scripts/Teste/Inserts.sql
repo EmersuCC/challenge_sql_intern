@@ -1,13 +1,14 @@
 
 -- Rode os 3 DELETES abaixo na ordem em que está para limpar todas as tabelas e reiniciar os IDs. 
 
+DELETE FROM PAGAMENTO; 
+ALTER SEQUENCE pagamento_id_pagamento_seq
+RESTART WITH 1;
+
 DELETE FROM FATURA;
 ALTER SEQUENCE fatura_id_fatura_seq
 RESTART WITH 1;
 
-DELETE FROM PAGAMENTO; 
-ALTER SEQUENCE pagamento_id_pagamento_seq
-RESTART WITH 1;
 
 DELETE FROM CLIENTE;
 ALTER SEQUENCE cliente_id_cliente_seq 
