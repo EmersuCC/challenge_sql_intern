@@ -33,7 +33,7 @@ CREATE OR REPLACE VIEW V_CLIENTE_LIM_BE_1000 AS
 		(IDADE BETWEEN 18
 		AND 21)
 		AND LIMITE_CREDITO >= 1000
-		AND STATUS_BLOQUEIO = 'A';
+
 
 -- View para verificar clientes que realizaram pagamento no dia do vencimento da Fatura.
 
@@ -68,67 +68,194 @@ CREATE OR REPLACE VIEW V_PAGAMENTOS_DIA_ANTERIOR AS
 -- View para verificar clientes que possuem faturas em atraso.
 
 CREATE OR REPLACE VIEW V_CLIENTE_EM_ATRASO AS
-	SELECT
-		C.ID_CLIENTE,
-		C.NOME,
-		F.VALOR,
-		F.DATA_VENCIMENTO,
-		CASE F.STATUS
-			WHEN 'P' THEN
-				'Pago'
-			WHEN 'A' THEN
-				'Atraso'
-		END                 AS STATUS,
-		EXTRACT(DAY
-	FROM
-		AGE(NOW(),
-		F.DATA_VENCIMENTO)) AS DIAS_EM_ATRASO
-	FROM
-		CLIENTE   C
-		JOIN FATURA F
-		ON C.ID_CLIENTE = F.ID_CLIENTE LEFT JOIN PAGAMENTO P
-		ON F.ID_FATURA = P.ID_FATURA
-	WHERE
-		F.STATUS IN ('A',
-		'P')
-		AND (P.DATA_PAGAMENTO IS NULL
-		OR P.DATA_PAGAMENTO > F.DATA_VENCIMENTO)
-	ORDER BY
+SELECT
+    C.ID_CLIENTE,
+    C.NOME,
+    F.VALOR,
+    F.DATA_VENCIMENTO,
+    CASE F.STATUS
+        WHEN 'P' THEN 'Pago'
+        WHEN 'A' THEN 'Atraso'
+    END AS STATUS,
+    EXTRACT(DAY FROM AGE(NOW(), F.DATA_VENCIMENTO)) AS DIAS_EM_ATRASO
+FROM
+    CLIENTE C
+    JOIN FATURA F ON C.ID_CLIENTE = F.ID_CLIENTE
+    LEFT JOIN PAGAMENTO P ON F.ID_FATURA = P.ID_FATURA
+WHERE
+    F.STATUS IN ('A', 'P')
+    AND (P.DATA_PAGAMENTO IS NULL OR P.DATA_PAGAMENTO > F.DATA_VENCIMENTO)
+ORDER BY
+    DIAS_EM_ATRASO DESC;
 
 
 
 -- View para listar os clientes que estão com faturas em atraso há mais de 3 dias
 
 CREATE OR REPLACE VIEW V_ATRASO_PAGAMENTO_3DIAS AS
-    SELECT
-        C.ID_CLIENTE,
-        C.NOME,
-        CASE
-            WHEN EXTRACT(DAY FROM AGE(NOW(), F.DATA_VENCIMENTO)) > 3 THEN
-                'Bloqueado'
-            ELSE
-                'Ativo'
-        END                 AS STATUS_BLOQUEIO,
-        F.ID_FATURA,
-        F.VALOR,
-        EXTRACT(DAY
-    FROM
-        AGE(NOW(),
-        F.DATA_VENCIMENTO)) AS DIAS_EM_ATRASO
-    FROM
-        CLIENTE   C
-        JOIN FATURA F
-        ON C.ID_CLIENTE = F.ID_CLIENTE LEFT JOIN PAGAMENTO P
-        ON F.ID_FATURA = P.ID_FATURA
-    WHERE
-        F.STATUS = 'A'
-        AND (P.DATA_PAGAMENTO IS NULL
-        OR P.DATA_PAGAMENTO > F.DATA_VENCIMENTO)
-    ORDER BY
-        DIAS_EM_ATRASO
+SELECT
+    C.ID_CLIENTE,
+    C.NOME,
+    CASE
+        WHEN EXTRACT(DAY FROM AGE(NOW(), F.DATA_VENCIMENTO)) > 3 THEN
+            'Bloqueado'
+        ELSE
+            'Ativo'
+    END AS STATUS_BLOQUEIO,
+    F.ID_FATURA,
+    F.VALOR,
+    EXTRACT(DAY FROM AGE(NOW(), F.DATA_VENCIMENTO)) AS DIAS_EM_ATRASO
+FROM
+    CLIENTE C
+    JOIN FATURA F ON C.ID_CLIENTE = F.ID_CLIENTE
+    LEFT JOIN PAGAMENTO P ON F.ID_FATURA = P.ID_FATURA
+WHERE
+    F.STATUS = 'A'
+    AND (P.DATA_PAGAMENTO IS NULL OR P.DATA_PAGAMENTO > F.DATA_VENCIMENTO)
+ORDER BY
+    DIAS_EM_ATRASO
 
-SELECT * FROM V_ATRASO_PAGAMENTO_3DIAS;
-SELECT * FROM V_PAGAMENTO_DIA_VENCIMENTO;
-SELECT * FROM V_PAGAMENTOS_DIA_ANTERIOR;
-SELECT * FROM V_CLIENTE_LIM_GE_1000;
-SELECT * FROM V_CLIENTE_EM_ATRASO;
+
+
+-- Função/Trigger para bloquear clientes que possuem faturas em atraso há mais de 3 dias
+CREATE OR REPLACE FUNCTION BLOQUEAR_CLIENTES() 
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE CLIENTE 
+    SET STATUS_BLOQUEIO = 'B' 
+    WHERE ID_CLIENTE IN (
+        SELECT ID_CLIENTE
+        FROM FATURA
+        WHERE DATA_VENCIMENTO < (NOW() - INTERVAL '3 days')
+        AND STATUS = 'A'
+    );
+    RETURN NEW;
+END;
+$$     
+LANGUAGE PLPGSQL;
+
+
+-- Trigger para a funcao de bloquear clientes
+
+CREATE TRIGGER TRG_BLOQUEAR_CLIENTES 
+AFTER INSERT OR UPDATE 
+ON FATURA 
+FOR EACH ROW 
+EXECUTE FUNCTION BLOQUEAR_CLIENTES();
+
+
+
+
+-- Função/Trigger para desbloquear clientes que possuem faturas em atraso há mais de 3 dias
+CREATE OR REPLACE FUNCTION DESBLOQUEAR_CLIENTES() 
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE CLIENTE 
+    SET STATUS_BLOQUEIO = 'A' 
+    WHERE ID_CLIENTE IN (
+        SELECT
+            ID_CLIENTE
+        FROM
+            FATURA
+        WHERE
+            DATA_VENCIMENTO >= (NOW() - INTERVAL '3 days')
+            AND STATUS = 'B'
+    );
+    RETURN NEW;
+END;
+$$     
+LANGUAGE PLPGSQL;
+
+
+-- Trigger para funcao de desbloquear clientes
+
+CREATE TRIGGER TRG_DESBLOQUEAR_CLIENTES 
+AFTER INSERT OR UPDATE 
+ON FATURA 
+FOR EACH ROW 
+EXECUTE FUNCTION DESBLOQUEAR_CLIENTES();
+
+
+-- Trigger para verificar limite de credito do cliente antes da abertura de uma nova fatura;
+CREATE OR REPLACE FUNCTION VERIFICAR_LIMITE_CREDITO() 
+RETURNS TRIGGER AS $$ 
+    DECLARE 
+        TOTAL_FATURAS_ABERTAS NUMERIC; 
+    BEGIN 
+        SELECT SUM(VALOR) INTO TOTAL_FATURAS_ABERTAS 
+        FROM FATURA 
+        WHERE ID_CLIENTE = NEW.ID_CLIENTE 
+        AND STATUS = 'A'; 
+        
+        IF TOTAL_FATURAS_ABERTAS + NEW.VALOR > (
+            SELECT LIMITE_CREDITO 
+            FROM CLIENTE 
+            WHERE ID_CLIENTE = NEW.ID_CLIENTE
+        ) THEN 
+            RAISE EXCEPTION 'Limite de crédito do cliente excedido'; 
+        END IF; 
+        
+        RETURN NEW; 
+    END; 
+$$ LANGUAGE PLPGSQL;
+
+
+-- Trigger para atualizar o limite de crédito do cliente quando a fatura estiver em atraso há mais de 3 dias
+
+CREATE OR REPLACE FUNCTION ATUALIZAR_LIMITE_CREDITO()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE CLIENTE 
+    SET LIMITE_CREDITO = 0 
+    WHERE CLIENTE.ID_CLIENTE IN (
+        SELECT FATURA.ID_CLIENTE 
+        FROM FATURA 
+        JOIN CLIENTE ON CLIENTE.ID_CLIENTE = FATURA.ID_CLIENTE 
+        WHERE FATURA.DATA_VENCIMENTO < (NOW() - INTERVAL '3 days') 
+        AND FATURA.STATUS = 'A'
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+-- Trigger para verificar limite de credito do cliente antes da abertura de uma nova fatura;
+CREATE TRIGGER TRG_ATUALIZAR_LIMITE_CREDITO
+AFTER INSERT OR UPDATE ON FATURA
+FOR EACH ROW
+EXECUTE FUNCTION ATUALIZAR_LIMITE_CREDITO();
+
+
+-- Function para rotina de excluir clientes sem fatura.
+CREATE OR REPLACE FUNCTION EXCLUIR_CLIENTES_SEM_FATURA() RETURNS VOID AS $$
+DECLARE 
+    CLIENTE_ID INTEGER;
+    TOTAL_EXCLUIDOS INTEGER := 0;
+    CUR CURSOR FOR (
+        SELECT ID_CLIENTE
+        FROM CLIENTE
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM FATURA
+            WHERE FATURA.ID_CLIENTE = CLIENTE.ID_CLIENTE
+        )
+    );
+BEGIN
+    OPEN CUR;
+    LOOP
+        FETCH CUR INTO CLIENTE_ID;
+        EXIT WHEN NOT FOUND;
+        DELETE FROM CLIENTE
+        WHERE ID_CLIENTE = CLIENTE_ID;
+        TOTAL_EXCLUIDOS := TOTAL_EXCLUIDOS + 1;
+        RAISE NOTICE 'Cliente ID % excluído', CLIENTE_ID;
+    END LOOP;
+    CLOSE CUR;
+    RAISE NOTICE 'Total de clientes excluídos: %', TOTAL_EXCLUIDOS;
+END;
+$$ LANGUAGE PLPGSQL;
+
+
+
+
