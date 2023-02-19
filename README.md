@@ -128,3 +128,5 @@ reais
   
   A função **EXCLUIR_CLIENTES_SEM_FATURA** pode ser agendada para execução
   automatica dentro de um periodo determinado por diferentes meios, a depender do sistema operacional.
+  
+  LEMBRANDO QUE TODAS AS FUNÇÕES PODEM SER ENCONTRADAS NO [DIRETORIO DE FUNÇ](https://github.com/EmersuCC/challenge_sql_intern/tree/main/Schema/Scripts/Functions)
